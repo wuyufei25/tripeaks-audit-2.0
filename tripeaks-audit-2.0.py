@@ -6,7 +6,7 @@ import io
 
 # 1. 页面基础配置
 st.set_page_config(page_title="Tripeaks 审计平台", layout="wide")
-st.title("🎴 Tripeaks 算法对比与深度审计平台")
+st.title("🎴 Tripeaks 算法对比与深度审计平台 2.0")
 
 
 # --- 【工具函数：严防 NameError】 ---
@@ -354,6 +354,7 @@ if uploaded_files:
                 file_name="Tripeaks_Audit_Details.csv",
                 mime="text/csv"
             )
+
 
 
 
