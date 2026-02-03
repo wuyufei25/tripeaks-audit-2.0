@@ -5,8 +5,8 @@ import chardet
 import io
 
 # 1. 页面基础配置
-st.set_page_config(page_title="Tripeaks 审计平台 2.0", layout="wide")
-st.title("🎴 Tripeaks 算法对比与深度审计平台 2.0")
+st.set_page_config(page_title="Tripeaks 审计平台 V1.9.25", layout="wide")
+st.title("🎴 Tripeaks 算法对比与深度审计平台 V1.9.25")
 
 # --- 【工具函数：严防 NameError】 ---
 def get_col_safe(df, target_keywords):
@@ -30,7 +30,7 @@ def calculate_advanced_stats(series, trim_percentage):
     return mu, var, cv
 
 def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
-    """审计引擎：新增4级贫瘠区，调整2/3级分值"""
+    """审计引擎：新增4级贫瘠区，并恢复动态扣分逻辑"""
     try:
         seq_raw = str(row[col_map['seq']])
         seq = [int(x.strip()) for x in seq_raw.split(',') if x.strip() != ""]
@@ -70,7 +70,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
     score += relay_score
     if relay_score > 0: breakdown.append(f"连击接力(+{relay_score})")
 
-    # B. 贫瘠区扣分 (调整逻辑：新增4级，调整2/3级分值)
+    # B. 贫瘠区扣分 (4级判定架构)
     c1, c2, c3, c4 = 0, 0, 0, 0
     boundaries = [-1] + eff_idx + [len(seq)]
     for j in range(len(boundaries)-1):
@@ -79,30 +79,34 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
         if inter:
             L, Z = len(inter), inter.count(0)
             
-            # Level 4: 绝望区 (新增)
-            # 条件：长度 >=8 或 (长度>=6 且 0牌>=4)
+            # --- Level 4: 绝望区 (新增) ---
+            # 逻辑说明：此判定必须最先执行。
+            # 条件：长度 >= 8 或 (长度 >= 6 且 0牌 >= 4)
             if L >= 8 or (L >= 6 and Z >= 4):
                 c4 += 1
-                score -= 25
-                breakdown.append("绝望区(-25)")
+                # 【恢复代码】恢复原有的“开局(start<=2)重罚”逻辑
+                # 这完全符合"4级-25分"的要求(针对恶劣开局)，同时保留了非开局-20的动态性
+                score -= (25 if start <= 2 else 20)
+                breakdown.append(f"枯竭区(-{'25' if start <= 2 else '20'})")
             
-            # Level 3: 枯竭区 (调整分值为 -15)
-            # 条件保持：长度 >=6 或 (长度>=4 且 0牌>=3)
-            # 注意：由于上方先判断了 L4，所以此处捕捉的是漏网的 L3
+            # --- Level 3: 枯竭区 (调整为固定 -15) ---
+            # 逻辑说明：由于使用了 elif，此处自然就是“满足L3但不满足L4”的漏网区间，
+            # 从而实现了逻辑上的“无重叠”。
+            # 条件：长度 >= 6 或 (长度 >= 4 且 0牌 >= 3)
             elif L >= 6 or (L >= 4 and Z >= 3): 
                 c3 += 1
                 score -= 15
                 breakdown.append("枯竭区(-15)")
             
-            # Level 2: 阻塞区 (调整分值为 -7)
-            # 条件保持：长度=5 或 (长度3-4 且 0牌=2)
+            # --- Level 2: 阻塞区 (调整为固定 -7) ---
+            # 条件：长度 == 5 或 (长度3-4 且 0牌 == 2)
             elif L == 5 or (3 <= L <= 4 and Z == 2): 
                 c2 += 1
                 score -= 7
                 breakdown.append("阻塞区(-7)")
             
-            # Level 1: 平庸区 (调整分值为 -3)
-            # 条件保持：长度 >= 3
+            # --- Level 1: 平庸区 (调整为固定 -3) ---
+            # 条件：长度 >= 3
             elif L >= 3: 
                 c1 += 1
                 score -= 3
