@@ -5,8 +5,8 @@ import chardet
 import io
 
 # 1. 页面基础配置
-st.set_page_config(page_title="Tripeaks 审计平台 2.0", layout="wide")
-st.title("🎴 Tripeaks 算法对比与深度审计平台 2.0")
+st.set_page_config(page_title="Tripeaks 审计平台", layout="wide")
+st.title("🎴 Tripeaks 算法对比与深度审计平台")
 
 # --- 【工具函数：严防 NameError】 ---
 def get_col_safe(df, target_keywords):
@@ -30,7 +30,7 @@ def calculate_advanced_stats(series, trim_percentage):
     return mu, var, cv
 
 def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
-    """审计引擎：新增4级贫瘠区，并恢复动态扣分逻辑"""
+    """审计引擎：保留原有逻辑，新增得分构成记录"""
     try:
         seq_raw = str(row[col_map['seq']])
         seq = [int(x.strip()) for x in seq_raw.split(',') if x.strip() != ""]
@@ -38,7 +38,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
         diff = row[col_map['diff']]
         actual = str(row[col_map['act']])
     except: 
-        return 0, "解析失败", 0, 0, 0, 0, 0, 0, 0, "数据错误", 0, 0, 0
+        return 0, "解析失败", 0, 0, 0, 0, 0, 0, "数据错误", 0, 0, 0
 
     score = base_init_score
     breakdown = [f"基础分({base_init_score})"] 
@@ -65,52 +65,30 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
         for i in range(len(eff_idx)-1):
             if (eff_idx[i+1]-eff_idx[i]-1) <= 1: relay += 1
     
-    # --- 接力分数 3, 5, 7 ---
+    # --- 接力分数保持 3, 5, 7 ---
     relay_score = (7 if relay >= 3 else 5 if relay == 2 else 3 if relay == 1 else 0)
+    # ----------------------------------
+    
     score += relay_score
     if relay_score > 0: breakdown.append(f"连击接力(+{relay_score})")
 
-    # B. 贫瘠区扣分 (4级判定架构)
-    c1, c2, c3, c4 = 0, 0, 0, 0
+    # B. 贫瘠区扣分
+    c1, c2, c3 = 0, 0, 0
     boundaries = [-1] + eff_idx + [len(seq)]
     for j in range(len(boundaries)-1):
         start, end = boundaries[j]+1, boundaries[j+1]
         inter = seq[start:end]
         if inter:
             L, Z = len(inter), inter.count(0)
-            
-            # --- Level 4: 绝望区 (新增) ---
-            # 逻辑说明：此判定必须最先执行。
-            # 条件：长度 >= 8 或 (长度 >= 6 且 0牌 >= 4)
-            if L >= 8 or (L >= 6 and Z >= 4):
-                c4 += 1
-                # 【恢复代码】恢复原有的“开局(start<=2)重罚”逻辑
-                # 这完全符合"4级-25分"的要求(针对恶劣开局)，同时保留了非开局-20的动态性
-                score -= (25 if start <= 2 else 20)
+            if L >= 6 or (L >= 4 and Z >= 3): 
+                c3 += 1; score -= 25 if start <= 2 else 20
                 breakdown.append(f"枯竭区(-{'25' if start <= 2 else '20'})")
-            
-            # --- Level 3: 枯竭区 (调整为固定 -15) ---
-            # 逻辑说明：由于使用了 elif，此处自然就是“满足L3但不满足L4”的漏网区间，
-            # 从而实现了逻辑上的“无重叠”。
-            # 条件：长度 >= 6 或 (长度 >= 4 且 0牌 >= 3)
-            elif L >= 6 or (L >= 4 and Z >= 3): 
-                c3 += 1
-                score -= 15
-                breakdown.append("枯竭区(-15)")
-            
-            # --- Level 2: 阻塞区 (调整为固定 -7) ---
-            # 条件：长度 == 5 或 (长度3-4 且 0牌 == 2)
             elif L == 5 or (3 <= L <= 4 and Z == 2): 
-                c2 += 1
-                score -= 7
-                breakdown.append("阻塞区(-7)")
-            
-            # --- Level 1: 平庸区 (调整为固定 -3) ---
-            # 条件：长度 >= 3
+                c2 += 1; score -= 9
+                breakdown.append("阻塞区(-9)")
             elif L >= 3: 
-                c1 += 1
-                score -= 3
-                breakdown.append("平庸区(-3)")
+                c1 += 1; score -= 5
+                breakdown.append("平庸区(-5)")
 
     # C. 自动化局判定
     f1, f2, red_auto = 0, 0, False
@@ -145,7 +123,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
                 is_burst = True; break
         if is_burst: red_tags.append("消除高度集中")
     
-    return score, ",".join(red_tags) if red_tags else "通过", c1, c2, c3, c4, relay, f1, f2, " | ".join(breakdown), max_combo, long_combo_cnt, valid_hand_cnt
+    return score, ",".join(red_tags) if red_tags else "通过", c1, c2, c3, relay, f1, f2, " | ".join(breakdown), max_combo, long_combo_cnt, valid_hand_cnt
 
 # --- 2. 侧边栏 ---
 with st.sidebar:
@@ -181,7 +159,7 @@ if uploaded_files:
 
     if raw_list:
         main_df = pd.concat(raw_list, ignore_index=True)
-        # 扩展列映射
+        # 扩展列映射：精准定位“剩余桌面牌盖压关系”和“测试轮次”
         cm = {
             'seq': get_col_safe(main_df, ['全部连击']), 
             'desk': get_col_safe(main_df, ['初始桌面牌']),
@@ -190,15 +168,14 @@ if uploaded_files:
             'hand': get_col_safe(main_df, ['初始手牌']), 
             'jid': get_col_safe(main_df, ['解集ID']),
             'rem_hand': get_col_safe(main_df, ['剩余手牌']), 
-            'rem_desk_num': get_col_safe(main_df, ['剩余桌面牌', '剩余桌面']), 
-            'rem_desk_detail': get_col_safe(main_df, ['剩余桌面牌盖压关系']),   
-            'round_idx': get_col_safe(main_df, ['测试轮次', '轮次'])         
+            'rem_desk_num': get_col_safe(main_df, ['剩余桌面牌', '剩余桌面']), # 纯数字计数
+            'rem_desk_detail': get_col_safe(main_df, ['剩余桌面牌盖压关系']),   # 具体的点数花色
+            'round_idx': get_col_safe(main_df, ['测试轮次', '轮次'])         # 原文件中的轮次
         }
 
         with st.spinner('执行红线并集概率审计...'):
             audit_res = main_df.apply(lambda r: pd.Series(audit_engine(r, cm, base_score, burst_win, burst_thr)), axis=1)
-            # 注意：此处增加了 c4 列的赋值
-            main_df[['得分', '红线判定', 'c1', 'c2', 'c3', 'c4', '接力', 'f1', 'f2', '得分构成', '最长连击', '长连次数', '有效手牌']] = audit_res
+            main_df[['得分', '红线判定', 'c1', 'c2', 'c3', '接力', 'f1', 'f2', '得分构成', '最长连击', '长连次数', '有效手牌']] = audit_res
 
             fact_list = []
             for (f_n, h_v, j_i, d_v), gp in main_df.groupby(['__ORIGIN__', cm['hand'], cm['jid'], cm['diff']]):
@@ -224,7 +201,7 @@ if uploaded_files:
                 
                 fact_list.append({
                     "源文件": f_n, "初始手牌": h_v, "解集ID": j_i, "难度": d_v,
-                    "μ_均值": mu, "σ²_方差": var, "CV_变异系数": cv, 
+                    "μ_均值": mu, "σ²_方差": var, "CV_变异系数": cv, # <--- 新增 CV 数据
                     "判定结论": reason,
                     "总红线率": total_red_rate, "数值崩坏率": is_break.mean(),
                     "自动化率": is_auto.mean(), "逻辑违逆率": is_logic.mean(), "爆发集中率": is_burst.mean(),
@@ -236,11 +213,11 @@ if uploaded_files:
         st.header("📊 算法策略看板")
         strat_rows = []
         for h_v, gp_h in df_fact.groupby('初始手牌'):
-            # 1. 计算通过数量
+            # 1. 计算通过数量 (Pass Count)
             pass_subset = gp_h[gp_h['is_pass'] == 1]
             diff_pass_cnt = pass_subset.groupby('难度').size().to_dict()
             
-            # 2. 计算【全局】平均分
+            # 2. 计算【全局】平均分 (Global Average Score)
             diff_global_avg = gp_h.groupby('难度')['μ_均值'].mean().to_dict()
             
             total_pass_jid = pass_subset.drop_duplicates(subset=['源文件', '解集ID']).shape[0]
@@ -255,8 +232,8 @@ if uploaded_files:
             
             # 填充难度列
             for d in sorted(df_fact['难度'].unique()):
-                cnt = diff_pass_cnt.get(d, 0)
-                avg = diff_global_avg.get(d, 0)
+                cnt = diff_pass_cnt.get(d, 0) # 通过的数量
+                avg = diff_global_avg.get(d, 0) # 全局的均分
                 if avg > 0 or cnt > 0:
                     row[f"难度{d} (通过|均分)"] = f"{cnt} (μ={avg:.1f})"
                 else:
@@ -265,7 +242,7 @@ if uploaded_files:
             strat_rows.append(row)
         st.dataframe(pd.DataFrame(strat_rows).style.format({"覆盖率":"{:.1%}"}), use_container_width=True)
 
-        # === 4.2 牌集风险明细排行 (含CV) ===
+        # === 4.2 牌集风险明细排行 (新增 CV 展示) ===
         st.divider()
         st.subheader("🎯 牌集风险明细排行 (并集概率校验)")
         f_h = st.multiselect("手牌维度", sorted(df_fact['初始手牌'].unique()), default=sorted(df_fact['初始手牌'].unique()))
@@ -278,13 +255,13 @@ if uploaded_files:
         st.dataframe(view_df.drop(columns=['is_pass']).style.applymap(
             lambda x: 'color: #ff4b4b' if '❌' in str(x) else 'color: #008000', subset=['判定结论']
         ).format({
-            "μ_均值":"{:.2f}", "σ²_方差":"{:.2f}", "CV_变异系数":"{:.2f}",
+            "μ_均值":"{:.2f}", "σ²_方差":"{:.2f}", "CV_变异系数":"{:.2f}", # <--- 新增格式化
             "总红线率":"{:.1%}", 
             "数值崩坏率":"{:.1%}", "自动化率":"{:.1%}", "逻辑违逆率":"{:.1%}", "爆发集中率":"{:.1%}"
         }), use_container_width=True)
         st.info(f"📊 数据核查：当前列表共有 {len(view_df[view_df['is_pass']==1])} 行通过记录，看板与明细已完全对齐。")
 
-        # === 4.3 Excel 下载模块 ===
+        # === 4.3 新增：Excel 下载模块 (保留所有修复) ===
         with st.sidebar:
             st.divider()
             st.header("📥 导出审计详情")
@@ -311,7 +288,7 @@ if uploaded_files:
                 '得分构成': '得分构成'
             }
             
-            # 1. 仅重命名存在的列
+            # 1. 仅重命名存在的列，缺失列补 N/A
             final_export_cols = {}
             for k, v in export_cols.items():
                 if k is not None and k in export_df.columns:
@@ -342,3 +319,6 @@ if uploaded_files:
                 file_name="Tripeaks_Audit_Details.csv",
                 mime="text/csv"
             )
+
+
+
