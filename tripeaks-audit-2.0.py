@@ -165,7 +165,7 @@ if uploaded_files:
             'desk': get_col_safe(main_df, ['初始桌面牌']),
             'diff': get_col_safe(main_df, ['难度']), 
             'act': get_col_safe(main_df, ['实际结果']),
-            'hand': get_col_safe(main_df, ['初始手牌']), 
+            'hand': get_col_safe(main_df, ['手牌数量']), 
             'jid': get_col_safe(main_df, ['解集ID']),
             'rem_hand': get_col_safe(main_df, ['剩余手牌']), 
             'rem_desk_num': get_col_safe(main_df, ['剩余桌面牌', '剩余桌面']), # 纯数字计数
@@ -319,6 +319,7 @@ if uploaded_files:
                 file_name="Tripeaks_Audit_Details.csv",
                 mime="text/csv"
             )
+
 
 
 
