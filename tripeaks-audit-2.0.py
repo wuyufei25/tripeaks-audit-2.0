@@ -29,7 +29,8 @@ def calculate_advanced_stats(series, trim_percentage):
     cv = (np.sqrt(var) / mu) if mu > 0 else 0
     return mu, var, cv
 
-def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
+# --- 【修改点1：在函数参数中增加 collapse_thr】 ---
+def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, collapse_thr):
     """审计引擎：保留原有逻辑，新增得分构成记录"""
     try:
         seq_raw = str(row[col_map['seq']])
@@ -111,7 +112,10 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
 
     # D. 红线判定
     red_tags = []
-    if max(seq) >= desk_init * 0.4: red_tags.append("数值崩坏")
+    
+    # --- 【修改点2：将固定的 0.4 改为由滑块传参控制的比例】 ---
+    if max(seq) >= desk_init * (collapse_thr / 100.0): red_tags.append("数值崩坏")
+    
     if red_auto: red_tags.append("自动化局")
     if (diff <= 30 and "失败" in actual) or (diff >= 40 and "胜利" in actual): red_tags.append("逻辑违逆")
     
@@ -136,6 +140,10 @@ with st.sidebar:
     
     st.divider()
     st.subheader("⚠️ 节奏风控红线")
+    
+    # --- 【修改点3：侧边栏新增控制滑块，初始值为 40】 ---
+    collapse_thr = st.slider("数值崩坏阈值 (%)", 0, 100, 40)
+    
     burst_win = st.number_input("连续手牌数 (窗口大小)", 1, 10, 3)
     burst_thr = st.slider("消除占比阈值 (%)", 0, 100, 80)
     st.divider()
@@ -174,7 +182,9 @@ if uploaded_files:
         }
 
         with st.spinner('执行红线并集概率审计...'):
-            audit_res = main_df.apply(lambda r: pd.Series(audit_engine(r, cm, base_score, burst_win, burst_thr)), axis=1)
+            # --- 【修改点4：在 apply 调用时传入 collapse_thr】 ---
+            audit_res = main_df.apply(lambda r: pd.Series(audit_engine(r, cm, base_score, burst_win, burst_thr, collapse_thr)), axis=1)
+            
             main_df[['得分', '红线判定', 'c1', 'c2', 'c3', '接力', 'f1', 'f2', '得分构成', '最长连击', '长连次数', '有效手牌']] = audit_res
 
             fact_list = []
@@ -319,7 +329,3 @@ if uploaded_files:
                 file_name="Tripeaks_Audit_Details.csv",
                 mime="text/csv"
             )
-
-
-
-
