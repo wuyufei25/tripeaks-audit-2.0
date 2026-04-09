@@ -269,7 +269,7 @@ if uploaded_files:
         elif f_s == "拒绝": view_df = view_df[view_df['is_pass'] == 0]
 
         # 考虑到 pandas 版本兼容性，保留原有的 applymap
-        st.dataframe(view_df.drop(columns=['is_pass']).style.applymap(
+        st.dataframe(view_df.drop(columns=['is_pass']).style.map(
             lambda x: 'color: #ff4b4b' if '❌' in str(x) else 'color: #008000', subset=['判定结论']
         ).format({
             "μ_均值":"{:.2f}", "σ²_方差":"{:.2f}", "CV_变异系数":"{:.2f}", 
