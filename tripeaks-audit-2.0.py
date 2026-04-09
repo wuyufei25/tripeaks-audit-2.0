@@ -5,8 +5,8 @@ import chardet
 import io
 
 # 1. 页面基础配置
-st.set_page_config(page_title="Tripeaks 审计平台", layout="wide")
-st.title("🎴 Tripeaks 算法对比与深度审计平台")
+st.set_page_config(page_title="Tripeaks 审计平台2.0", layout="wide")
+st.title("🎴 Tripeaks 算法对比与深度审计平台2.0")
 
 # --- 【工具函数：严防 NameError】 ---
 def get_col_safe(df, target_keywords):
@@ -160,7 +160,7 @@ with st.sidebar:
     win_mu_limit = st.slider("胜测(10-30) 及格门槛", 0, 100, 50)
     loss_mu_limit = st.slider("败测(40-60) 及格门槛", 0, 100, 35)
     
-    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 15)
+    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 25)
     
     # --- 新增：双轨制数值崩坏阈值 ---
     st.divider()
