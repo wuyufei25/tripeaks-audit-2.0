@@ -123,11 +123,11 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
         elif 5 <= fl <= 6: 
             f2 += 1
             score -= 9
-            breakdown.append("过度投喂(-9)")
+            breakdown.append("过度投喂(-12)")
         elif fl == 4: 
             f1 += 1
             score -= 3
-            breakdown.append("高频投喂(-3)")
+            breakdown.append("高频投喂(-6)")
 
     # D. 红线判定 (已优化：双轨制数值崩坏判定)
     red_tags = []
