@@ -77,7 +77,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
     score += relay_score
     if relay_score > 0: breakdown.append(f"连击接力(+{relay_score})")
 
-    # B. 贫瘠区扣分 (保留之前新增的绝望区)
+   # B. 贫瘠区扣分 (已优化：基于初始桌面牌进度的动态系数计算)
     c1, c2, c3, c4 = 0, 0, 0, 0
     boundaries = [-1] + eff_idx + [len(seq)]
     for j in range(len(boundaries)-1):
@@ -86,26 +86,49 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
         if inter:
             L, Z = len(inter), inter.count(0)
             
+            # --- 新增：计算当前所处的游戏阶段与系数 ---
+            # 通过 start 索引，计算在进入该贫瘠区前，玩家已经消除了多少张桌面牌
+            cleared_before = sum(seq[:start])
+            progress = cleared_before / desk_init if desk_init > 0 else 0
+            
+            if progress < 0.30:
+                coef = 1.5
+                phase = "开局"
+            elif progress >= 0.80:
+                coef = 0.8
+                phase = "残局"
+            else:
+                coef = 1.0
+                phase = "中局"
+            # ------------------------------------------
+            
             # 4级：绝望区
             if L >= 8 or (L >= 7 and Z >= 5):
                 c4 += 1
-                score -= 25
-                breakdown.append("绝望区(-25)")
+                penalty = 25 * coef
+                score -= penalty
+                breakdown.append(f"绝望区(-{penalty:g}[{phase}])")
+                
             # 3级：枯竭区
             elif L >= 6 or (L >= 4 and Z >= 3):
                 c3 += 1
-                score -= 15
-                breakdown.append("枯竭区(-15)")
-            # 2级：阻塞区
+                penalty = 15 * coef
+                score -= penalty
+                breakdown.append(f"枯竭区(-{penalty:g}[{phase}])")
+                
+            # 2级：阻塞区 (保留之前修复的 Z >= 2 逻辑)
             elif L == 5 or (3 <= L <= 4 and Z >= 2):
                 c2 += 1
-                score -= 9
-                breakdown.append("阻塞区(-9)")
+                penalty = 9 * coef
+                score -= penalty
+                breakdown.append(f"阻塞区(-{penalty:g}[{phase}])")
+                
             # 1级：平庸区
             elif L >= 3:
                 c1 += 1
-                score -= 5
-                breakdown.append("平庸区(-5)")
+                penalty = 5 * coef
+                score -= penalty
+                breakdown.append(f"平庸区(-{penalty:g}[{phase}])")
 
     # C. 自动化局判定
     f1, f2, red_auto = 0, 0, False
