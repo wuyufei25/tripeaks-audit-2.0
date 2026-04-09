@@ -175,7 +175,7 @@ with st.sidebar:
     st.divider()
     trim_val = st.slider("截断比例 (%)", 0, 30, 15)
     cv_limit = st.slider("最大 CV (稳定性)", 0.05, 0.50, 0.20)
-    var_limit = st.slider("最大方差保护", 10, 100, 40)
+    var_limit = st.slider("最大方差保护", 10, 100, 60)
     uploaded_files = st.file_uploader("📂 上传测试数据", type=["xlsx", "csv"], accept_multiple_files=True)
 
 # --- 3. 计算流程 ---
