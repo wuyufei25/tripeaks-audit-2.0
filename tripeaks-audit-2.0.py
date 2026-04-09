@@ -97,7 +97,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
                 score -= 15
                 breakdown.append("枯竭区(-15)")
             # 2级：阻塞区
-            elif L == 5 or (3 <= L <= 4 and Z == 2):
+            elif L == 5 or (3 <= L <= 4 and Z >= 2):
                 c2 += 1
                 score -= 9
                 breakdown.append("阻塞区(-9)")
