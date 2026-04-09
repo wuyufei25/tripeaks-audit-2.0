@@ -159,7 +159,7 @@ with st.sidebar:
     st.divider()
     st.subheader("🎯 双轨制及格门槛 (μ)")
     win_mu_limit = st.slider("胜测(10-30) 及格门槛", 0, 100, 50)
-    loss_mu_limit = st.slider("败测(40-60) 及格门槛", 0, 100, 35)
+    loss_mu_limit = st.slider("败测(40-60) 及格门槛", 0, 100, 45)
     
     
     # --- 新增：双轨制数值崩坏阈值 ---
