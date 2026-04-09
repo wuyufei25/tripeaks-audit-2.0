@@ -5,8 +5,8 @@ import chardet
 import io
 
 # 1. 页面基础配置
-st.set_page_config(page_title="Tripeaks 审计平台2.0", layout="wide")
-st.title("🎴 Tripeaks 算法对比与深度审计平台2.0")
+st.set_page_config(page_title="Tripeaks 审计平台", layout="wide")
+st.title("🎴 Tripeaks 算法对比与深度审计平台")
 
 # --- 【工具函数：严防 NameError】 ---
 def get_col_safe(df, target_keywords):
@@ -160,7 +160,7 @@ with st.sidebar:
     win_mu_limit = st.slider("胜测(10-30) 及格门槛", 0, 100, 50)
     loss_mu_limit = st.slider("败测(40-60) 及格门槛", 0, 100, 35)
     
-    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 25)
+    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 15)
     
     # --- 新增：双轨制数值崩坏阈值 ---
     st.divider()
@@ -300,4 +300,59 @@ if uploaded_files:
             "总红线率":"{:.1%}", 
             "数值崩坏率":"{:.1%}", "自动化率":"{:.1%}", "逻辑违逆率":"{:.1%}", "爆发集中率":"{:.1%}"
         }), use_container_width=True)
-        st.info(f"📊 数据核查：当前列表共有 {len(view_df[view
+        st.info(f"📊 数据核查：当前列表共有 {len(view_df[view_df['is_pass']==1])} 行通过记录，看板与明细已完全对齐。")
+
+        # === 4.3 Excel 下载模块 ===
+        with st.sidebar:
+            st.divider()
+            st.header("📥 导出审计详情")
+            export_df = main_df.copy()
+            
+            export_cols = {
+                '__ORIGIN__': '关卡ID',
+                cm['jid']: '解集ID',
+                cm['round_idx']: '测试轮次',   
+                cm['diff']: '难度',
+                cm['act']: '实际结果',
+                cm['rem_hand']: '剩余手牌',
+                cm['rem_desk_num']: '剩余桌面牌数',      
+                cm['rem_desk_detail']: '剩余桌面牌详情', 
+                '最长连击': '最长连击',
+                '长连次数': '长连次数',
+                cm['seq']: '全部连击',
+                '有效手牌': '有效手牌',
+                cm['desk']: '初始桌面牌',
+                cm['hand']: '初始手牌',
+                '得分': '得分',
+                '红线判定': '红线判定',
+                '得分构成': '得分构成'
+            }
+            
+            final_export_cols = {}
+            for k, v in export_cols.items():
+                if k is not None and k in export_df.columns:
+                    final_export_cols[k] = v
+                elif v in ['剩余手牌', '剩余桌面牌数', '剩余桌面牌详情', '测试轮次']: 
+                    if k is None: export_df[v] = 'N/A' 
+                    else: final_export_cols[k] = v 
+
+            export_df = export_df.rename(columns=final_export_cols)
+
+            if '测试轮次' not in export_df.columns:
+                export_df.insert(2, '测试轮次', range(1, 1 + len(export_df)))
+            
+            target_cols = ['关卡ID', '解集ID', '测试轮次', '难度', '实际结果', 
+                           '剩余手牌', '剩余桌面牌数', '剩余桌面牌详情', 
+                           '最长连击', '长连次数', '全部连击', '有效手牌', '初始桌面牌', '初始手牌', 
+                           '得分', '红线判定', '得分构成']
+            
+            target_cols = [c for c in target_cols if c in export_df.columns]
+            
+            csv_data = export_df[target_cols].to_csv(index=False).encode('utf-8-sig')
+            
+            st.download_button(
+                label="📄 下载完整审计明细 (Excel)",
+                data=csv_data,
+                file_name="Tripeaks_Audit_Details.csv",
+                mime="text/csv"
+            )
