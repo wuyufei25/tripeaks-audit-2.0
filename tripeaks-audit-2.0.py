@@ -254,7 +254,7 @@ if uploaded_files:
                 reason = "✅ 通过"
                 
                 # 动态分配及格门槛
-                current_mu_limit = win_mu_limit if num_diff <= 20 else loss_mu_limit
+                current_mu_limit = win_mu_limit if num_diff <= 30 else loss_mu_limit
                 
                 if total_red_rate >= (red_rate_limit / 100):
                     mode_reason = gp[is_any_red]['红线判定'].str.split(',').explode().mode()[0]
