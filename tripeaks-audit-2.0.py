@@ -29,16 +29,18 @@ def calculate_advanced_stats(series, trim_percentage):
     cv = (np.sqrt(var) / mu) if mu > 0 else 0
     return mu, var, cv
 
-def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
-    """审计引擎：保留原有逻辑，新增得分构成记录"""
+def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, win_collapse_thr, loss_collapse_thr):
+    """审计引擎：新增双轨制数值崩坏参数传入"""
     try:
         seq_raw = str(row[col_map['seq']])
         seq = [int(x.strip()) for x in seq_raw.split(',') if x.strip() != ""]
         desk_init = row[col_map['desk']]
         diff = row[col_map['diff']]
         actual = str(row[col_map['act']])
+        # 提取当前难度用于双轨制判定
+        try: num_diff = int(float(diff))
+        except: num_diff = 0
     except: 
-        # 注意：此处返回的默认值数量已同步增加 1 个 0，以匹配新增的 c4
         return 0, "解析失败", 0, 0, 0, 0, 0, 0, 0, "数据错误", 0, 0, 0
 
     score = base_init_score
@@ -75,7 +77,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
     score += relay_score
     if relay_score > 0: breakdown.append(f"连击接力(+{relay_score})")
 
-    # B. 贫瘠区扣分 (已优化：新增绝望区并调整分值)
+    # B. 贫瘠区扣分 (保留之前新增的绝望区)
     c1, c2, c3, c4 = 0, 0, 0, 0
     boundaries = [-1] + eff_idx + [len(seq)]
     for j in range(len(boundaries)-1):
@@ -89,19 +91,16 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
                 c4 += 1
                 score -= 25
                 breakdown.append("绝望区(-25)")
-                
             # 3级：枯竭区
             elif L >= 6 or (L >= 4 and Z >= 3):
                 c3 += 1
                 score -= 15
                 breakdown.append("枯竭区(-15)")
-                
             # 2级：阻塞区
             elif L == 5 or (3 <= L <= 4 and Z == 2):
                 c2 += 1
                 score -= 9
                 breakdown.append("阻塞区(-9)")
-                
             # 1级：平庸区
             elif L >= 3:
                 c1 += 1
@@ -130,11 +129,14 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
             score -= 3
             breakdown.append("高频投喂(-3)")
 
-    # D. 红线判定
+    # D. 红线判定 (已优化：双轨制数值崩坏判定)
     red_tags = []
-    if max(seq) >= desk_init * 0.4: red_tags.append("数值崩坏")
+    # 根据难度动态获取对应的数值崩坏阈值
+    current_collapse_thr = win_collapse_thr if num_diff <= 30 else loss_collapse_thr
+    
+    if max(seq) >= desk_init * (current_collapse_thr / 100.0): red_tags.append(f"数值崩坏(≥{current_collapse_thr}%)")
     if red_auto: red_tags.append("自动化局")
-    if (diff <= 30 and "失败" in actual) or (diff >= 40 and "胜利" in actual): red_tags.append("逻辑违逆")
+    if (num_diff <= 30 and "失败" in actual) or (num_diff >= 40 and "胜利" in actual): red_tags.append("逻辑违逆")
     
     total_eliminated = sum(seq)
     if total_eliminated > 0 and len(seq) >= burst_window:
@@ -151,11 +153,23 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold):
 with st.sidebar:
     st.header("⚙️ 审计全局参数")
     base_score = st.slider("审计初始分 (Base)", 0, 100, 65)
-    mu_limit = st.slider("及格门槛 (μ)", 0, 100, 50)
-    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 15)
+    
+    # --- 新增：双轨制及格分 ---
+    st.divider()
+    st.subheader("🎯 双轨制及格门槛 (μ)")
+    win_mu_limit = st.slider("胜测(10-30) 及格门槛", 0, 100, 50)
+    loss_mu_limit = st.slider("败测(40-60) 及格门槛", 0, 100, 35)
+    
+    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 25)
+    
+    # --- 新增：双轨制数值崩坏阈值 ---
+    st.divider()
+    st.subheader("⚠️ 双轨制红线：数值崩坏")
+    win_collapse_thr = st.slider("胜测 数值崩坏阈值 (%)", 10, 100, 50)
+    loss_collapse_thr = st.slider("败测 数值崩坏阈值 (%)", 10, 100, 40)
     
     st.divider()
-    st.subheader("⚠️ 节奏风控红线")
+    st.subheader("⚠️ 节奏风控红线 (通用)")
     burst_win = st.number_input("连续手牌数 (窗口大小)", 1, 10, 3)
     burst_thr = st.slider("消除占比阈值 (%)", 0, 100, 80)
     st.divider()
@@ -194,8 +208,8 @@ if uploaded_files:
         }
 
         with st.spinner('执行红线并集概率审计...'):
-            audit_res = main_df.apply(lambda r: pd.Series(audit_engine(r, cm, base_score, burst_win, burst_thr)), axis=1)
-            # 此处已增加 c4 字段
+            # 传入新增的双轨制参数
+            audit_res = main_df.apply(lambda r: pd.Series(audit_engine(r, cm, base_score, burst_win, burst_thr, win_collapse_thr, loss_collapse_thr)), axis=1)
             main_df[['得分', '红线判定', 'c1', 'c2', 'c3', 'c4', '接力', 'f1', 'f2', '得分构成', '最长连击', '长连次数', '有效手牌']] = audit_res
 
             fact_list = []
@@ -206,18 +220,28 @@ if uploaded_files:
                 is_logic = gp['红线判定'].str.contains("逻辑违逆")
                 is_burst = gp['红线判定'].str.contains("消除高度集中")
                 
+                # 获取当前分组的难度值，判断是胜测还是败测
+                try: num_diff = int(float(d_v))
+                except: num_diff = 0
+                
                 is_any_red = is_break | is_auto | is_logic | is_burst
                 total_red_rate = is_any_red.sum() / total
                 
                 mu, var, cv = calculate_advanced_stats(gp['得分'], trim_val)
                 reason = "✅ 通过"
                 
+                # 动态分配及格门槛
+                current_mu_limit = win_mu_limit if num_diff <= 30 else loss_mu_limit
+                
                 if total_red_rate >= (red_rate_limit / 100):
                     mode_reason = gp[is_any_red]['红线判定'].str.split(',').explode().mode()[0]
                     reason = f"❌ 红线拒绝 ({mode_reason})"
-                elif mu < mu_limit: reason = "❌ 分值拒绝"
-                elif cv > cv_limit: reason = "❌ 稳定性拒绝"
-                elif var > var_limit: reason = "❌ 波动拒绝"
+                elif mu < current_mu_limit: 
+                    reason = f"❌ 分值拒绝(需≥{current_mu_limit})"
+                elif cv > cv_limit: 
+                    reason = "❌ 稳定性拒绝"
+                elif var > var_limit: 
+                    reason = "❌ 波动拒绝"
                 
                 fact_list.append({
                     "源文件": f_n, "初始手牌": h_v, "解集ID": j_i, "难度": d_v,
@@ -268,7 +292,7 @@ if uploaded_files:
         if f_s == "通过": view_df = view_df[view_df['is_pass'] == 1]
         elif f_s == "拒绝": view_df = view_df[view_df['is_pass'] == 0]
 
-        # 考虑到 pandas 版本兼容性，保留原有的 applymap
+        # 修复后的 Pandas 2.1+ 兼容代码：使用 map 代替 applymap
         st.dataframe(view_df.drop(columns=['is_pass']).style.map(
             lambda x: 'color: #ff4b4b' if '❌' in str(x) else 'color: #008000', subset=['判定结论']
         ).format({
@@ -276,59 +300,4 @@ if uploaded_files:
             "总红线率":"{:.1%}", 
             "数值崩坏率":"{:.1%}", "自动化率":"{:.1%}", "逻辑违逆率":"{:.1%}", "爆发集中率":"{:.1%}"
         }), use_container_width=True)
-        st.info(f"📊 数据核查：当前列表共有 {len(view_df[view_df['is_pass']==1])} 行通过记录，看板与明细已完全对齐。")
-
-        # === 4.3 新增：Excel 下载模块 ===
-        with st.sidebar:
-            st.divider()
-            st.header("📥 导出审计详情")
-            export_df = main_df.copy()
-            
-            export_cols = {
-                '__ORIGIN__': '关卡ID',
-                cm['jid']: '解集ID',
-                cm['round_idx']: '测试轮次',   
-                cm['diff']: '难度',
-                cm['act']: '实际结果',
-                cm['rem_hand']: '剩余手牌',
-                cm['rem_desk_num']: '剩余桌面牌数',      
-                cm['rem_desk_detail']: '剩余桌面牌详情', 
-                '最长连击': '最长连击',
-                '长连次数': '长连次数',
-                cm['seq']: '全部连击',
-                '有效手牌': '有效手牌',
-                cm['desk']: '初始桌面牌',
-                cm['hand']: '初始手牌',
-                '得分': '得分',
-                '红线判定': '红线判定',
-                '得分构成': '得分构成'
-            }
-            
-            final_export_cols = {}
-            for k, v in export_cols.items():
-                if k is not None and k in export_df.columns:
-                    final_export_cols[k] = v
-                elif v in ['剩余手牌', '剩余桌面牌数', '剩余桌面牌详情', '测试轮次']: 
-                    if k is None: export_df[v] = 'N/A' 
-                    else: final_export_cols[k] = v 
-
-            export_df = export_df.rename(columns=final_export_cols)
-
-            if '测试轮次' not in export_df.columns:
-                export_df.insert(2, '测试轮次', range(1, 1 + len(export_df)))
-            
-            target_cols = ['关卡ID', '解集ID', '测试轮次', '难度', '实际结果', 
-                           '剩余手牌', '剩余桌面牌数', '剩余桌面牌详情', 
-                           '最长连击', '长连次数', '全部连击', '有效手牌', '初始桌面牌', '初始手牌', 
-                           '得分', '红线判定', '得分构成']
-            
-            target_cols = [c for c in target_cols if c in export_df.columns]
-            
-            csv_data = export_df[target_cols].to_csv(index=False).encode('utf-8-sig')
-            
-            st.download_button(
-                label="📄 下载完整审计明细 (Excel)",
-                data=csv_data,
-                file_name="Tripeaks_Audit_Details.csv",
-                mime="text/csv"
-            )
+        st.info(f"📊 数据核查：当前列表共有 {len(view_df[view
