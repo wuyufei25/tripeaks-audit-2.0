@@ -132,7 +132,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
     # D. 红线判定 (已优化：双轨制数值崩坏判定)
     red_tags = []
     # 根据难度动态获取对应的数值崩坏阈值
-    current_collapse_thr = win_collapse_thr if num_diff <= 30 else loss_collapse_thr
+    current_collapse_thr = win_collapse_thr if num_diff <= 20 else loss_collapse_thr
     
     if max(seq) >= desk_init * (current_collapse_thr / 100.0): red_tags.append(f"数值崩坏(≥{current_collapse_thr}%)")
     if red_auto: red_tags.append("自动化局")
@@ -165,8 +165,8 @@ with st.sidebar:
     # --- 新增：双轨制数值崩坏阈值 ---
     st.divider()
     st.subheader("⚠️ 双轨制红线：数值崩坏")
-    win_collapse_thr = st.slider("胜测 数值崩坏阈值 (%)", 10, 100, 50)
-    loss_collapse_thr = st.slider("败测 数值崩坏阈值 (%)", 10, 100, 40)
+    win_collapse_thr = st.slider("爽局(10-20) 崩坏阈值 (%)", 10, 100, 50)
+    loss_collapse_thr = st.slider("卡点/败局(30-60) 崩坏阈值 (%)", 10, 100, 40)
     
     st.divider()
     st.subheader("⚠️ 节奏风控红线 (通用)")
@@ -231,7 +231,7 @@ if uploaded_files:
                 reason = "✅ 通过"
                 
                 # 动态分配及格门槛
-                current_mu_limit = win_mu_limit if num_diff <= 30 else loss_mu_limit
+                current_mu_limit = win_mu_limit if num_diff <= 20 else loss_mu_limit
                 
                 if total_red_rate >= (red_rate_limit / 100):
                     mode_reason = gp[is_any_red]['红线判定'].str.split(',').explode().mode()[0]
