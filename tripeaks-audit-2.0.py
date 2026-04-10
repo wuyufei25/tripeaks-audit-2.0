@@ -176,7 +176,7 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
 with st.sidebar:
     st.header("⚙️ 审计全局参数")
     base_score = st.slider("审计初始分 (Base)", 0, 100, 65)
-    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 25)
+    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 20)
     
     # --- 新增：双轨制及格分 ---
     st.divider()
