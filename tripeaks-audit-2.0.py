@@ -176,7 +176,9 @@ def audit_engine(row, col_map, base_init_score, burst_window, burst_threshold, w
 with st.sidebar:
     st.header("⚙️ 审计全局参数")
     base_score = st.slider("审计初始分 (Base)", 0, 100, 65)
-    red_rate_limit = st.slider("红线率容忍度 (%)", 0, 100, 20)
+    red_rate_limit = st.slider("常规红线容忍度 (%)", 0, 100, 20)
+    logic_rate_limit = st.slider("逻辑违逆容忍度 (%)", 0, 100, 15) # 新增独立滑块
+    
     
     # --- 新增：双轨制及格分 ---
     st.divider()
@@ -247,8 +249,12 @@ if uploaded_files:
                 try: num_diff = int(float(d_v))
                 except: num_diff = 0
                 
-                is_any_red = is_break | is_auto | is_logic | is_burst
+               # 将“逻辑违逆”从常规红线池中单独剥离
+                is_any_red = is_break | is_auto | is_burst
                 total_red_rate = is_any_red.sum() / total
+                
+                # 单独计算逻辑违逆率
+                logic_rate = is_logic.sum() / total
                 
                 mu, var, cv = calculate_advanced_stats(gp['得分'], trim_val)
                 reason = "✅ 通过"
@@ -256,10 +262,17 @@ if uploaded_files:
                 # 动态分配及格门槛
                 current_mu_limit = win_mu_limit if num_diff <= 20 else loss_mu_limit
                 
-                if total_red_rate >= (red_rate_limit / 100):
-                    mode_reason = gp[is_any_red]['红线判定'].str.split(',').explode().mode()[0]
+                # 优先判定独立的“逻辑违逆”是否超标
+                if logic_rate >= (logic_rate_limit / 100):
+                    reason = "❌ 逻辑违逆拒绝"
+                # 再判定其他常规红线是否超标
+                elif total_red_rate >= (red_rate_limit / 100):
+                    # 过滤掉标签中的"逻辑违逆"，确保这里展示的是常规红线的原因
+                    tags = gp[is_any_red]['红线判定'].str.split(',').explode()
+                    tags = tags[tags != "逻辑违逆"]
+                    mode_reason = tags.mode()[0] if not tags.empty else "综合红线"
                     reason = f"❌ 红线拒绝 ({mode_reason})"
-                elif mu < current_mu_limit: 
+                elif mu < current_mu_limit:
                     reason = f"❌ 分值拒绝(需≥{current_mu_limit})"
                 elif cv > cv_limit: 
                     reason = "❌ 稳定性拒绝"
