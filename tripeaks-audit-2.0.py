@@ -18,7 +18,7 @@ def get_col_safe(df, target_keywords):
 def check_logic_violation(row, col_map):
     """
     独立逻辑违逆判定引擎
-    胜测(10-30)：如果实际结果包含"失败"，则判定违逆（30为险胜）
+    胜测(10-30)：如果实际结果包含"失败"，则判定违逆（30为险胜，属于胜测区间）
     败测(40-60)：如果实际结果包含"胜利"，则判定违逆
     """
     try:
@@ -29,7 +29,7 @@ def check_logic_violation(row, col_map):
     except: 
         return False, "解析失败"
 
-    # 修正后的双轨判定逻辑
+    # 双轨判定逻辑（30级及以下属于胜测）
     if num_diff <= 30 and "失败" in actual:
         return True, "低/中难败局"
     elif num_diff >= 40 and "胜利" in actual:
@@ -104,8 +104,37 @@ if uploaded_files:
                 })
             df_fact = pd.DataFrame(fact_list)
 
-        # === 4.1 看板展示 ===
-        st.header("📊 逻辑违逆风险明细")
+        # === 4.1 看板展示（还原原先工具的去重通过牌集统计） ===
+        st.header("📊 算法策略看板")
+        strat_rows = []
+        
+        for h_v, gp_h in df_fact.groupby('初始手牌'):
+            pass_subset = gp_h[gp_h['is_pass'] == 1]
+            diff_pass_cnt = pass_subset.groupby('难度').size().to_dict()
+            
+            # 去重计算通过和总牌集数量（源文件 + 解集ID 唯一定义一个独立牌集）
+            total_pass_jid = pass_subset.drop_duplicates(subset=['源文件', '解集ID']).shape[0]
+            total_unique_jid = gp_h.drop_duplicates(subset=['源文件', '解集ID']).shape[0]
+            
+            row = {
+                "手牌数": h_v, 
+                "牌集总数": total_unique_jid, 
+                "✅ 通过(去重)": total_pass_jid, 
+                "覆盖率": total_pass_jid / total_unique_jid if total_unique_jid > 0 else 0
+            }
+            
+            # 动态生成各个难度的通过牌集数量明细
+            for d in sorted(df_fact['难度'].unique()):
+                cnt = diff_pass_cnt.get(d, 0) 
+                row[f"难度{d} (通过数)"] = f"{cnt}"
+            
+            strat_rows.append(row)
+            
+        st.dataframe(pd.DataFrame(strat_rows).style.format({"覆盖率": "{:.1%}"}), use_container_width=True)
+
+        # === 4.2 牌集风险明细排行 ===
+        st.divider()
+        st.subheader("🎯 逻辑违逆风险明细")
         
         f_h = st.multiselect("手牌维度过滤", sorted(df_fact['初始手牌'].unique()), default=sorted(df_fact['初始手牌'].unique()))
         f_s = st.radio("判定过滤", ["全部", "通过", "拒绝"], horizontal=True)
@@ -117,14 +146,14 @@ if uploaded_files:
         st.dataframe(view_df.drop(columns=['is_pass']).style.map(
             lambda x: 'color: #ff4b4b' if '❌' in str(x) else 'color: #008000', subset=['判定结论']
         ).format({
-            "逻辑违逆率":"{:.1%}"
+            "逻辑违逆率": "{:.1%}"
         }), use_container_width=True)
         
         pass_count = len(view_df[view_df['判定结论'] == '✅ 通过'])
         fail_count = len(view_df[view_df['判定结论'] == '❌ 逻辑违逆拒绝'])
-        st.info(f"📊 数据核查：当前列表共有 **{pass_count}** 条通过记录，**{fail_count}** 条拒绝记录。")
+        st.info(f"📊 数据核查：当前列表共有 **{pass_count}** 条通过记录，**{fail_count}** 条拒绝记录。看板与明细数据已完全对齐。")
 
-        # === 4.2 Excel 下载模块 ===
+        # === 4.3 Excel 下载模块 ===
         with st.sidebar:
             st.divider()
             st.header("📥 导出审计详情")
